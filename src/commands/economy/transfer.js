@@ -1,22 +1,29 @@
-const User = require('../../models/User');
+const { ensureUser, getUser } = require('../../store/runtimeStore');
 
 module.exports = {
     name: 'transfer',
     aliases: ['pay'],
     async execute(message, args) {
         const target = message.mentions.users.first();
-        const amount = parseInt(args[1]);
+        const amount = Number.parseInt(args[1], 10);
 
-        if (!target || isNaN(amount) || amount <= 0) return message.reply("**Format salah! Gunakan: .transfer @user [jumlah]**");
-        if (target.id === message.author.id) return message.reply("**Tidak bisa transfer ke diri sendiri!**");
+        if (!target || Number.isNaN(amount) || amount <= 0) {
+            return message.reply('**Format salah! Gunakan: .transfer @user [jumlah]**');
+        }
 
-        const sender = await User.findOne({ userId: message.author.id, guildId: message.guild.id });
-        if (!sender || sender.coins < amount) return message.reply("**Koin kamu tidak cukup!**");
+        if (target.id === message.author.id) {
+            return message.reply('**Tidak bisa transfer ke diri sendiri!**');
+        }
 
-        await User.findOneAndUpdate({ userId: target.id, guildId: message.guild.id }, { $inc: { coins: amount } }, { upsert: true });
+        const sender = getUser(message.guild.id, message.author.id);
+        if (!sender || sender.coins < amount) {
+            return message.reply('**Koin kamu tidak cukup!**');
+        }
+
+        const receiver = ensureUser(message.guild.id, target.id);
         sender.coins -= amount;
-        await sender.save();
+        receiver.coins += amount;
 
-        message.reply(`**Berhasil mentransfer 💰 ${amount} koin ke ${target.username}.**`);
+        return message.reply(`**Berhasil mentransfer 💰 ${amount} koin ke ${target.username}.**`);
     }
 };

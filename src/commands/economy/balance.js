@@ -1,12 +1,12 @@
-const User = require('../../models/User');
 const { EmbedBuilder } = require('discord.js');
+const { getUser } = require('../../store/runtimeStore');
 
 module.exports = {
     name: 'bal',
     aliases: ['balance', 'money'],
     async execute(message) {
         const target = message.mentions.users.first() || message.author;
-        const data = await User.findOne({ userId: target.id, guildId: message.guild.id });
+        const data = getUser(message.guild.id, target.id);
         
         const embed = new EmbedBuilder()
             .setAuthor({ name: target.username, iconURL: target.displayAvatarURL() })

@@ -1,23 +1,31 @@
-const Guild = require('../../models/Guild');
+const { updateGuild } = require('../../store/runtimeStore');
+const config = require('../../config.json');
 
 module.exports = {
     name: 'setup',
     permissions: ['Administrator'],
     async execute(message, args) {
-        const option = args[0];
-        const value = message.mentions.channels.first()?.id || message.mentions.roles.first()?.id;
+        const option = args[0]?.toLowerCase();
+        const channelId = message.mentions.channels.first()?.id;
+        const roleId = message.mentions.roles.first()?.id;
+        const value = option === 'role' ? roleId : channelId;
 
-        if (!option || !value) return message.reply("**Format: .setup [welcome/log/verify/role] @mention**");
+        if (!option || !value || !['welcome', 'log', 'verify', 'role'].includes(option)) {
+            return message.reply('**Format: .setup [welcome/log/verify/role] @mention**');
+        }
 
-        let guildData = await Guild.findOne({ guildId: message.guild.id });
-        if (!guildData) guildData = await Guild.create({ guildId: message.guild.id });
+        updateGuild(message.guild.id, (guild) => {
+            if (option === 'welcome') guild.welcomeChannel = value;
+            if (option === 'log') guild.logChannel = value;
+            if (option === 'verify') guild.verifyChannel = value;
+            if (option === 'role') guild.memberRole = value;
+        }, {
+            welcomeChannel: config.welcomeChannel,
+            logChannel: config.logChannel,
+            verifyChannel: config.verifyChannel,
+            memberRole: config.memberRole
+        });
 
-        if (option === 'welcome') guildData.welcomeChannel = value;
-        if (option === 'log') guildData.logChannel = value;
-        if (option === 'verify') guildData.verifyChannel = value;
-        if (option === 'role') guildData.memberRole = value;
-
-        await guildData.save();
-        message.reply(`**Berhasil mengatur ${option} ke <#${value} || @&${value}>!**`);
+        return message.reply(`**Berhasil mengatur ${option} ke ${option === 'role' ? `<@&${value}>` : `<#${value}>`}!**`);
     }
 };

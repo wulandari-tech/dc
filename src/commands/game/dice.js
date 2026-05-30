@@ -1,31 +1,34 @@
-const User = require('../../models/User');
+const { getUser } = require('../../store/runtimeStore');
 
 module.exports = {
     name: 'dice',
     async execute(message, args) {
-        const bet = parseInt(args[0]);
-        if (!bet || isNaN(bet) || bet < 100) return message.reply("**Minimal taruhan adalah 💰 100 koin!**");
-
-        let data = await User.findOne({ userId: message.author.id, guildId: message.guild.id });
-        if (!data || data.coins < bet) return message.reply("**Koin kamu tidak cukup!**");
-
-        const uRoll = Math.floor(Math.random() * 6) + 1;
-        const bRoll = Math.floor(Math.random() * 6) + 1;
-
-        let resultMsg = `**🎲 DICE ROLL**\n**Kamu:** \`[ ${uRoll} ]\`\n**Bot:** \`[ ${bRoll} ]\`\n\n`;
-
-        if (uRoll > bRoll) {
-            const winAmount = uRoll === 6 ? bet * 2 : Math.floor(bet * 1.5);
-            data.coins += winAmount;
-            resultMsg += `**MENANG!** Kamu mendapatkan **💰 ${winAmount}** koin! (Bonus x2 jika roll 6)`;
-        } else if (uRoll < bRoll) {
-            data.coins -= bet;
-            resultMsg += `**KALAH!** Kamu kehilangan **💰 ${bet}** koin.`;
-        } else {
-            resultMsg += `**SERI!** Koin kamu aman.`;
+        const bet = Number.parseInt(args[0], 10);
+        if (!bet || Number.isNaN(bet) || bet < 100) {
+            return message.reply('**Minimal taruhan adalah 💰 100 koin!**');
         }
 
-        await data.save();
-        message.reply(resultMsg);
+        const data = getUser(message.guild.id, message.author.id);
+        if (!data || data.coins < bet) {
+            return message.reply('**Koin kamu tidak cukup!**');
+        }
+
+        const userRoll = Math.floor(Math.random() * 6) + 1;
+        const botRoll = Math.floor(Math.random() * 6) + 1;
+
+        let result = `**🎲 DICE ROLL**\n**Kamu:** \`[ ${userRoll} ]\`\n**Bot:** \`[ ${botRoll} ]\`\n\n`;
+
+        if (userRoll > botRoll) {
+            const winAmount = userRoll === 6 ? bet * 2 : Math.floor(bet * 1.5);
+            data.coins += winAmount;
+            result += `**MENANG!** Kamu mendapatkan **💰 ${winAmount}** koin!`;
+        } else if (userRoll < botRoll) {
+            data.coins -= bet;
+            result += `**KALAH!** Kamu kehilangan **💰 ${bet}** koin.`;
+        } else {
+            result += '**SERI!** Koin kamu aman.';
+        }
+
+        return message.reply(result);
     }
 };
