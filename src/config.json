@@ -1,11 +1,9 @@
 {
-  "token": "MTQ1NDU0MzYzNzM4Njg5MTUwOQ.GS9Oyx.6lXXvs1g8NfWtW3aYkiDV01R6ATxV0u_MHMD_8",
+  "token": "MTQ1NDU0MzYzNzM4Njg5MTUwOQ.GYzMMm.CSKfnhedmD7ijOFe_nfUthgku5ndXDhzD3dE94",
   "mongoURI": "mongodb+srv://wanzbray_db_user:THO5w5ecGY41zm0B@cluster0.bresujd.mongodb.net/dc?appName=Cluster0",
   "prefix": ".",
   "welcomeChannel": "1435907078685458487",
   "logChannel": "1435907078685458487",
   "verifyChannel": "1435907078685458487",
-  "memberRole": "ISI_DENGAN_ID_ROLE_MEMBER",
-  "emoji_1": "<:emoji_1:1435907078685458487>",
-  "userAgent": "asisNewCoding/1.0"
+  "emoji_1": "<:emoji_1:1435907078685458487>"
 }
