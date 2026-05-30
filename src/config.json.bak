@@ -1,0 +1,7 @@
+{
+  "token": "TOKEN_BOT_ANDA",
+  "mongoURI": "MONGODB_URI_ANDA",
+  "prefix": ".",
+  "emoji_1": "<:emoji_1:123456789012345678>",
+  "userAgent": "MyCodingBot/1.0 (https://discord.gg/yourlink)"
+}

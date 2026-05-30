@@ -1,0 +1,12 @@
+src/
+
+│
+│   └── moderation/
+│       └── setup.js
+├── models/
+│   ├── User.js
+│   └── Shop.js
+├── utils/
+│   └── topgg.js
+├── config.json
+index.js

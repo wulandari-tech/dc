@@ -1,0 +1,11 @@
+{
+  "token": "SALIN_TOKEN_BARU_SETELAH_DI_RESET_DISINI",
+  "mongoURI": "MONGODB_URI_ANDA_DISINI",
+  "prefix": ".",
+  "welcomeChannel": "1435907078685458487",
+  "logChannel": "1435907078685458487",
+  "verifyChannel": "1435907078685458487",
+  "memberRole": "ISI_DENGAN_ID_ROLE_MEMBER",
+  "emoji_1": "<:emoji_1:123456789012345678>",
+  "userAgent": "asisNewCoding/1.0"
+}
