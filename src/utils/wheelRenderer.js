@@ -1,5 +1,5 @@
 const { createCanvas } = require('@napi-rs/canvas');
-const GIFEncoder = require('gifencoder');
+const { GIFEncoder, quantize, applyPalette } = require('gifenc');
 
 const WIDTH = 900;
 const HEIGHT = 900;
@@ -7,31 +7,43 @@ const CENTER = 450;
 const RADIUS = 310;
 const SEGMENT_COLORS = ['#f97316', '#ef4444', '#8b5cf6', '#22c55e', '#0ea5e9', '#eab308'];
 const SEGMENTS = [
-    { icon: '🍀', label: 'SMALL' },
-    { icon: '⚡', label: 'BOOST' },
-    { icon: '💎', label: 'BIG' },
-    { icon: '👑', label: 'JACKPOT' },
-    { icon: '❌', label: 'MISS' },
-    { icon: '🎁', label: 'BONUS' }
+    { icon: '\u{1F340}', label: 'SMALL' },
+    { icon: '\u26A1', label: 'BOOST' },
+    { icon: '\u{1F48E}', label: 'BIG' },
+    { icon: '\u{1F451}', label: 'JACKPOT' },
+    { icon: '\u274C', label: 'MISS' },
+    { icon: '\u{1F381}', label: 'BONUS' }
 ];
 
-function collectGifBuffer(encoder) {
-    return new Promise((resolve, reject) => {
-        const chunks = [];
-        const stream = encoder.createReadStream();
-        stream.on('data', (chunk) => chunks.push(chunk));
-        stream.on('end', () => resolve(Buffer.concat(chunks)));
-        stream.on('error', reject);
-    });
+function frameToIndexed(ctx, width, height) {
+    const rgba = ctx.getImageData(0, 0, width, height).data;
+    const palette = quantize(rgba, 256);
+    const index = applyPalette(rgba, palette);
+    return { palette, index };
 }
 
-function drawBackground(ctx) {
+function buildGifFromFrames(width, height, frameDrawers, delay) {
+    const gif = GIFEncoder();
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+
+    frameDrawers.forEach((draw, index) => {
+        draw(ctx);
+        const { palette, index: indexedPixels } = frameToIndexed(ctx, width, height);
+        gif.writeFrame(indexedPixels, width, height, {
+            palette,
+            delay,
+            repeat: index === 0 ? 0 : undefined
+        });
+    });
+
+    gif.finish();
+    return Buffer.from(gif.bytes());
+}
+
+function drawBackground(ctx, width, height) {
     ctx.fillStyle = '#0b1020';
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
-    ctx.beginPath();
-    ctx.arc(CENTER, CENTER, RADIUS + 28, 0, Math.PI * 2);
-    ctx.fillStyle = '#111827';
-    ctx.fill();
+    ctx.fillRect(0, 0, width, height);
 }
 
 function drawPointer(ctx) {
@@ -45,9 +57,14 @@ function drawPointer(ctx) {
 }
 
 function drawWheelBase(ctx, rotation, title, selectedLabel, rewardText, modeLabel) {
-    drawBackground(ctx);
-    const anglePerSegment = (Math.PI * 2) / SEGMENTS.length;
+    drawBackground(ctx, WIDTH, HEIGHT);
 
+    ctx.beginPath();
+    ctx.arc(CENTER, CENTER, RADIUS + 28, 0, Math.PI * 2);
+    ctx.fillStyle = '#111827';
+    ctx.fill();
+
+    const anglePerSegment = (Math.PI * 2) / SEGMENTS.length;
     for (let index = 0; index < SEGMENTS.length; index += 1) {
         const start = -Math.PI / 2 + rotation + index * anglePerSegment;
         const end = start + anglePerSegment;
@@ -100,96 +117,73 @@ function drawWheelBase(ctx, rotation, title, selectedLabel, rewardText, modeLabe
     ctx.fillText(rewardText, CENTER, 150);
 }
 
-async function renderWheelGif({ title, selectedLabel, rewardText, modeLabel }) {
-    const canvas = createCanvas(WIDTH, HEIGHT);
-    const ctx = canvas.getContext('2d');
-    const encoder = new GIFEncoder(WIDTH, HEIGHT);
-    const bufferPromise = collectGifBuffer(encoder);
+function renderWheelGif({ title, selectedLabel, rewardText, modeLabel }) {
     const anglePerSegment = (Math.PI * 2) / SEGMENTS.length;
     const segmentIndex = Math.max(0, SEGMENTS.findIndex((segment) => segment.label === selectedLabel));
     const targetCenterAngle = -Math.PI / 2 + (segmentIndex * anglePerSegment) + anglePerSegment / 2;
     const finalRotation = -targetCenterAngle;
     const totalRotation = finalRotation + Math.PI * 6.5;
-    const frames = 26;
+    const frames = [];
 
-    encoder.start();
-    encoder.setRepeat(0);
-    encoder.setDelay(55);
-    encoder.setQuality(10);
-
-    for (let frame = 0; frame < frames; frame += 1) {
-        const progress = frame / (frames - 1);
+    for (let frame = 0; frame < 26; frame += 1) {
+        const progress = frame / 25;
         const eased = 1 - ((1 - progress) ** 3);
         const rotation = totalRotation * eased;
-        drawWheelBase(ctx, rotation, title, selectedLabel, rewardText, modeLabel);
-        encoder.addFrame(ctx);
+        frames.push((ctx) => drawWheelBase(ctx, rotation, title, selectedLabel, rewardText, modeLabel));
     }
 
     for (let hold = 0; hold < 6; hold += 1) {
-        drawWheelBase(ctx, totalRotation, title, selectedLabel, rewardText, modeLabel);
-        encoder.addFrame(ctx);
+        frames.push((ctx) => drawWheelBase(ctx, totalRotation, title, selectedLabel, rewardText, modeLabel));
     }
 
-    encoder.finish();
-    return bufferPromise;
+    return buildGifFromFrames(WIDTH, HEIGHT, frames, 55);
 }
 
-async function renderCoinflipGif({ result, choice, rewardText }) {
+function drawCoinFrame(ctx, width, height, scaleX, face, choice, rewardText) {
+    drawBackground(ctx, width, height);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 34px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('COINFLIP ARENA', width / 2, 56);
+
+    ctx.save();
+    ctx.translate(width / 2, 205);
+    ctx.scale(scaleX, 1);
+    ctx.beginPath();
+    ctx.arc(0, 0, 92, 0, Math.PI * 2);
+    ctx.fillStyle = '#facc15';
+    ctx.fill();
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = '#fef3c7';
+    ctx.stroke();
+    ctx.fillStyle = '#1f2937';
+    ctx.font = 'bold 42px Arial';
+    ctx.fillText(face === 'HEADS' ? '\u{1FA99}' : '\u{1F4BF}', 0, 12);
+    ctx.restore();
+
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '28px Arial';
+    ctx.fillText(`Pilihan: ${choice.toUpperCase()}`, width / 2, 320);
+    ctx.fillStyle = '#fde68a';
+    ctx.font = 'bold 28px Arial';
+    ctx.fillText(rewardText, width / 2, 362);
+}
+
+function renderCoinflipGif({ result, choice, rewardText }) {
     const width = 700;
     const height = 420;
-    const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext('2d');
-    const encoder = new GIFEncoder(width, height);
-    const bufferPromise = collectGifBuffer(encoder);
-    const frames = 22;
+    const frames = [];
 
-    encoder.start();
-    encoder.setRepeat(0);
-    encoder.setDelay(60);
-    encoder.setQuality(10);
-
-    for (let frame = 0; frame < frames; frame += 1) {
-        const progress = frame / (frames - 1);
+    for (let frame = 0; frame < 22; frame += 1) {
+        const progress = frame / 21;
         const spin = Math.sin(progress * Math.PI * 8);
         const scaleX = Math.max(0.08, Math.abs(spin));
-        const face = frame < frames - 4 ? (frame % 2 === 0 ? 'HEADS' : 'TAILS') : result.toUpperCase();
-        const faceEmoji = face === 'HEADS' ? '🪙' : '💿';
-
-        ctx.fillStyle = '#08111f';
-        ctx.fillRect(0, 0, width, height);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 34px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('COINFLIP ARENA', width / 2, 56);
-
-        ctx.save();
-        ctx.translate(width / 2, 205);
-        ctx.scale(scaleX, 1);
-        ctx.beginPath();
-        ctx.arc(0, 0, 92, 0, Math.PI * 2);
-        ctx.fillStyle = '#facc15';
-        ctx.fill();
-        ctx.lineWidth = 8;
-        ctx.strokeStyle = '#fef3c7';
-        ctx.stroke();
-        ctx.fillStyle = '#1f2937';
-        ctx.font = 'bold 42px Arial';
-        ctx.fillText(faceEmoji, 0, 12);
-        ctx.restore();
-
-        ctx.fillStyle = '#cbd5e1';
-        ctx.font = '28px Arial';
-        ctx.fillText(`Pilihan: ${choice.toUpperCase()}`, width / 2, 320);
-        ctx.fillStyle = '#fde68a';
-        ctx.font = 'bold 28px Arial';
-        ctx.fillText(rewardText, width / 2, 362);
-
-        encoder.addFrame(ctx);
+        const face = frame < 18 ? (frame % 2 === 0 ? 'HEADS' : 'TAILS') : result.toUpperCase();
+        frames.push((ctx) => drawCoinFrame(ctx, width, height, scaleX, face, choice, rewardText));
     }
 
-    encoder.finish();
-    return bufferPromise;
+    return buildGifFromFrames(width, height, frames, 60);
 }
 
 module.exports = {
