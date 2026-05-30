@@ -1,9 +1,12 @@
-const { Client, GatewayIntentBits, Collection, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const mongoose = require('mongoose');
 const express = require('express');
 const fs = require('fs');
+
+// Membaca file config
+const config = require('./src/config.json');
 const User = require('./src/models/User');
-const Guild = require('./src/models/Guild');
+const Guild = require('./src/models/Guild'); // Pastikan file ini ada di folder models
 
 const app = express();
 app.get('/', (req, res) => res.send('Bot is Active'));
@@ -24,13 +27,7 @@ const xpCooldown = new Set();
 const msgLog = new Map();
 let joinVelocity = [];
 
-const config = {
-    token: "MTQ1NDU0MzYzNzM4Njg5MTUwOQ.GS9Oyx.6lXXvs1g8NfWtW3aYkiDV01R6ATxV0u_MHMD_8",
-    mongoURI: "mongodb+srv://wanz:rn3Td8zKDRaLRbDZ@cluster0.bresujd.mongodb.net/dc?appName=Cluster0",
-    prefix: ".",
-    emoji_1: "<:emoji_1:123456789012345678>"
-};
-
+// Load Commands
 const commandFolders = fs.readdirSync('./src/commands');
 for (const folder of commandFolders) {
     const commandFiles = fs.readdirSync(`./src/commands/${folder}`).filter(file => file.endsWith('.js'));
@@ -40,12 +37,13 @@ for (const folder of commandFolders) {
     }
 }
 
+// Fungsi Bantu
 async function getOrCreateRole(guild, name, color) {
     let role = guild.roles.cache.find(r => r.name === name);
     if (!role) {
         try {
             role = await guild.roles.create({ name, color, reason: 'System Auto Role' });
-        } catch (e) { console.log("Permission Error: Role bot harus di atas!"); }
+        } catch (e) { console.log("Gagal buat role: Pastikan role bot paling atas!"); }
     }
     return role;
 }
@@ -58,22 +56,22 @@ function createBar(current, total) {
 
 client.on('ready', async () => {
     await mongoose.connect(config.mongoURI);
-    console.log(`Bot Online: ${client.user.tag}`);
+    console.log(`✅ Berhasil Login: ${client.user.tag}`);
 });
 
+// Event Member Join
 client.on('guildMemberAdd', async (member) => {
     const now = Date.now();
     joinVelocity.push(now);
     joinVelocity = joinVelocity.filter(t => now - t < 10000);
     if (joinVelocity.length > 8) return member.kick("Raid Protection");
 
-    const gData = await Guild.findOne({ guildId: member.guild.id });
-    const welcomeChan = member.guild.channels.cache.get(gData?.welcomeChannel);
+    const welcomeChan = member.guild.channels.cache.get(config.welcomeChannel);
     if (welcomeChan) {
-        welcomeChan.send(`**Welcome NewCoding** <@${member.id}>**, Selamat datang di server kami!** ${config.emoji_1}`);
+        welcomeChan.send(`**Welcome NewCoding** <@${member.id}>**, Selamat datang!** ${config.emoji_1}`);
     }
 
-    const vChan = member.guild.channels.cache.get(gData?.verifyChannel);
+    const vChan = member.guild.channels.cache.get(config.verifyChannel);
     if (vChan) {
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('verify_btn').setLabel('VERIFIKASI').setStyle(ButtonStyle.Success)
@@ -82,12 +80,7 @@ client.on('guildMemberAdd', async (member) => {
     }
 });
 
-client.on('guildMemberRemove', async (member) => {
-    const gData = await Guild.findOne({ guildId: member.guild.id });
-    const log = member.guild.channels.cache.get(gData?.logChannel);
-    if (log) log.send(`**📤 Member Leave:** **${member.user.tag}**`);
-});
-
+// Event Message
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
 
@@ -97,17 +90,18 @@ client.on('messageCreate', async (message) => {
         return setTimeout(() => m.delete(), 3000);
     }
 
+    // Anti Spam & Phishing
     const logs = msgLog.get(message.author.id) || [];
     logs.push(Date.now());
     msgLog.set(message.author.id, logs.filter(t => Date.now() - t < 5000));
     if (logs.length > 5) return message.delete();
 
-    const phishing = /(discord-nitro|nitro-app|free-nitro|discord-gift|bit\.ly|t\.co|discord\.gg)/i;
+    const phishing = /(discord-nitro|free-nitro|discord\.gg)/i;
     if (phishing.test(message.content) && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-        await message.delete();
-        return;
+        return message.delete();
     }
 
+    // Leveling System
     if (!xpCooldown.has(message.author.id)) {
         let data = await User.findOneAndUpdate(
             { userId: message.author.id, guildId: message.guild.id },
@@ -125,12 +119,13 @@ client.on('messageCreate', async (message) => {
             if (role) await message.member.roles.add(role);
 
             const bar = createBar(data.xp, nextLv);
-            message.channel.send(`**LEVEL UP!** <@${message.author.id}> **Level ${data.level}**\n**Next:** \`[ ${bar} ]\``);
+            message.channel.send(`**LEVEL UP!** <@${message.author.id}> **Level ${data.level}**\n\`[ ${bar} ]\``);
         }
         xpCooldown.add(message.author.id);
         setTimeout(() => xpCooldown.delete(message.author.id), 60000);
     }
 
+    // Command Handler
     if (!message.content.startsWith(config.prefix)) return;
     const args = message.content.slice(config.prefix.length).trim().split(/ +/);
     const cmdName = args.shift().toLowerCase();
@@ -152,4 +147,7 @@ client.on('interactionCreate', async (i) => {
     }
 });
 
-client.login(config.token);
+// Login menggunakan token dari config.json
+client.login(config.token).catch(err => {
+    console.error("❌ TOKEN SALAH/EXPIRED! Silahkan Reset Token di Dev Portal.");
+});
