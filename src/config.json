@@ -1,6 +1,6 @@
 {
   "token": "MTQ1NDU0MzYzNzM4Njg5MTUwOQ.GS9Oyx.6lXXvs1g8NfWtW3aYkiDV01R6ATxV0u_MHMD_8",
-  "mongoURI": "mongodb+srv://wanz:rn3Td8zKDRaLRbDZ@cluster0.bresujd.mongodb.net/dc?appName=Cluster0",
+  "mongoURI": "mongodb+srv://wanzbray_db_user:THO5w5ecGY41zm0B@cluster0.bresujd.mongodb.net/dc?appName=Cluster0",
   "prefix": ".",
   "welcomeChannel": "1435907078685458487",
   "logChannel": "1435907078685458487",
