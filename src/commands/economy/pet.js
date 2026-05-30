@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const config = require('../../config.json');
+const config = require('../../config');
 const { ensureUser, removeItem, addItem } = require('../../store/runtimeStore');
 const {
     PET_DEFS,

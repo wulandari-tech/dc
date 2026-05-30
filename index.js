@@ -10,14 +10,27 @@ const {
 } = require('discord.js');
 const express = require('express');
 const fs = require('fs');
-const config = require('./src/config.json');
+const config = require('./src/config');
 const { ensureGuild, ensureUser, updateUser } = require('./src/store/runtimeStore');
 const { getActiveBoostMultiplier } = require('./src/utils/economy');
 const { getDuelChallenge, removeDuelChallenge } = require('./src/store/duelStore');
 const { getPetPassive } = require('./src/utils/petSystem');
 
+const discordToken = config.token;
+let botStatus = {
+    state: 'booting',
+    detail: 'Memulai container',
+    readyAt: null
+};
+
 const app = express();
-app.get('/', (req, res) => res.send('System Online'));
+app.get('/', (req, res) => {
+    res.json({
+        service: 'asis-newcoding',
+        web: 'online',
+        discord: botStatus
+    });
+});
 app.listen(process.env.PORT || 3000);
 
 const client = new Client({
@@ -266,6 +279,11 @@ client.once('clientReady', async () => {
     for (const guild of client.guilds.cache.values()) {
         getGuildSettings(guild.id);
     }
+    botStatus = {
+        state: 'ready',
+        detail: `${client.user.tag} connected`,
+        readyAt: new Date().toISOString()
+    };
     console.log(`[ready] ${client.user.tag} is ready with upgraded dashboard`);
 });
 
@@ -514,4 +532,31 @@ client.on('error', (error) => console.error('[discord-client-error]', error));
 process.on('unhandledRejection', (reason) => console.error('[unhandledRejection]', reason));
 process.on('uncaughtException', (error) => console.error('[uncaughtException]', error));
 
-client.login(config.token);
+if (!discordToken) {
+    botStatus = {
+        state: 'failed',
+        detail: 'DISCORD_TOKEN / TOKEN belum diisi',
+        readyAt: null
+    };
+    console.error('[startup] Discord token tidak ditemukan. Isi DISCORD_TOKEN di environment Railway.');
+} else {
+    botStatus = {
+        state: 'connecting',
+        detail: 'Menghubungkan client Discord',
+        readyAt: null
+    };
+
+    client.login(discordToken).catch((error) => {
+        const detail = error?.code === 'TokenInvalid'
+            ? 'Token Discord tidak valid atau sudah direset'
+            : (error?.message || 'Gagal login ke Discord');
+
+        botStatus = {
+            state: 'failed',
+            detail,
+            readyAt: null
+        };
+
+        console.error('[discord-login-failed]', error);
+    });
+}

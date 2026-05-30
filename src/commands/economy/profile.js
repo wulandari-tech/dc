@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const config = require('../../config');
 const { ensureUser } = require('../../store/runtimeStore');
 const { formatCoins } = require('../../utils/economy');
 const { getActivePet, ensurePetCollections, refreshPetImage } = require('../../utils/petSystem');
@@ -41,7 +42,7 @@ module.exports = {
             );
 
         if (activePet) {
-            await refreshPetImage(activePet, require('../../config.json').userAgent);
+            await refreshPetImage(activePet, config.userAgent);
             if (activePet.imageUrl) embed.setThumbnail(activePet.imageUrl);
         }
 

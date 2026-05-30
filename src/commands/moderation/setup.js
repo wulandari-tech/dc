@@ -1,5 +1,5 @@
 const { updateGuild } = require('../../store/runtimeStore');
-const config = require('../../config.json');
+const config = require('../../config');
 
 module.exports = {
     name: 'setup',

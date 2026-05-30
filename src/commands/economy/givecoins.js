@@ -1,4 +1,4 @@
-const config = require('../../config.json');
+const config = require('../../config');
 const { PermissionFlagsBits } = require('discord.js');
 const { ensureUser } = require('../../store/runtimeStore');
 const { formatCoins } = require('../../utils/economy');

@@ -1,5 +1,5 @@
 const { AutoPoster } = require('topgg-autoposter');
-const config = require('../config.json');
+const config = require('../config');
 
 module.exports = (client) => {
     if (config.topggToken) {

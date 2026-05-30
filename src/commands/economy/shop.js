@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const config = require('../../config.json');
+const config = require('../../config');
 const { ensureUser, addItem } = require('../../store/runtimeStore');
 const { SHOP_ITEMS, ANIME_CATEGORIES, formatCoins } = require('../../utils/economy');
 const { fetchAnimeCard, PROVIDERS } = require('../../utils/animeProviders');
