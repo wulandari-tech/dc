@@ -12,7 +12,7 @@ module.exports = {
             return message.reply('**User ini belum memiliki data aktivitas chat.**');
         }
 
-        const xpNeeded = data.level * 1000;
+        const xpNeeded = data.level * 800;
         const percentage = Math.floor((data.xp / xpNeeded) * 100);
         const progress = Math.floor((data.xp / xpNeeded) * 10);
         const bar = '#'.repeat(progress) + '-'.repeat(10 - progress);

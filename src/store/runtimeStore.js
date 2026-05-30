@@ -12,8 +12,30 @@ function getDefaultUser(guildId, userId) {
         xp: 0,
         level: 1,
         coins: 0,
+        bank: 0,
         lastDaily: null,
-        inventory: []
+        lastWeekly: null,
+        lastWork: null,
+        lastBeg: null,
+        lastCrime: null,
+        lastRob: null,
+        lastBankHeist: null,
+        inventory: [],
+        items: {},
+        boosts: [],
+        pets: {},
+        activePetId: null,
+        petStorage: {},
+        profile: {
+            badge: null,
+            background: null,
+            title: null,
+            pet: null
+        },
+        criminal: {
+            wantedLevel: 0,
+            hackMeter: 0
+        }
     };
 }
 
@@ -25,7 +47,8 @@ function getDefaultGuild(guildId, defaults = {}) {
         verifyChannel: defaults.verifyChannel || null,
         memberRole: defaults.memberRole || null,
         badWords: [],
-        isLockdown: false
+        isLockdown: false,
+        warnings: {}
     };
 }
 
@@ -64,9 +87,20 @@ function updateGuild(guildId, updater, defaults) {
     return guild;
 }
 
-function getLeaderboard(guildId, limit = 10) {
-    return [...userStore.values()]
-        .filter((user) => user.guildId === guildId)
+function getLeaderboard(guildId, limit = 10, metric = 'level') {
+    const users = [...userStore.values()].filter((user) => user.guildId === guildId);
+
+    if (metric === 'coins') {
+        return users
+            .sort((left, right) => {
+                const leftTotal = left.coins + left.bank;
+                const rightTotal = right.coins + right.bank;
+                return rightTotal - leftTotal;
+            })
+            .slice(0, limit);
+    }
+
+    return users
         .sort((left, right) => {
             if (right.level !== left.level) {
                 return right.level - left.level;
@@ -76,6 +110,48 @@ function getLeaderboard(guildId, limit = 10) {
         .slice(0, limit);
 }
 
+function addItem(guildId, userId, itemName, amount = 1) {
+    const user = ensureUser(guildId, userId);
+    user.items[itemName] = (user.items[itemName] || 0) + amount;
+    return user;
+}
+
+function removeItem(guildId, userId, itemName, amount = 1) {
+    const user = ensureUser(guildId, userId);
+    const current = user.items[itemName] || 0;
+    if (current < amount) return false;
+
+    const next = current - amount;
+    if (next <= 0) delete user.items[itemName];
+    else user.items[itemName] = next;
+
+    return true;
+}
+
+function getWarnings(guildId, userId) {
+    const guild = ensureGuild(guildId);
+    return guild.warnings[userId] || [];
+}
+
+function addWarning(guildId, userId, reason, moderatorId) {
+    const guild = ensureGuild(guildId);
+    if (!guild.warnings[userId]) guild.warnings[userId] = [];
+    guild.warnings[userId].push({
+        reason,
+        moderatorId,
+        createdAt: Date.now()
+    });
+    return guild.warnings[userId];
+}
+
+function removeWarning(guildId, userId) {
+    const guild = ensureGuild(guildId);
+    if (!guild.warnings[userId]?.length) return [];
+    guild.warnings[userId].pop();
+    if (!guild.warnings[userId].length) delete guild.warnings[userId];
+    return guild.warnings[userId] || [];
+}
+
 module.exports = {
     getUser,
     ensureUser,
@@ -83,5 +159,10 @@ module.exports = {
     getGuild,
     ensureGuild,
     updateGuild,
-    getLeaderboard
+    getLeaderboard,
+    addItem,
+    removeItem,
+    getWarnings,
+    addWarning,
+    removeWarning
 };
