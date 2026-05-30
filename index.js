@@ -1,78 +1,113 @@
-const { Client, GatewayIntentBits, Collection, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const mongoose = require('mongoose');
 const express = require('express');
-const config = require('./src/config.json');
+const fs = require('fs');
 const User = require('./src/models/User');
+const Guild = require('./src/models/Guild');
 
-// --- SERVER UNTUK VERCEL (KEEP ALIVE) ---
 const app = express();
-app.get('/', (req, res) => res.send('Bot is Online!'));
-app.listen(3000, () => console.log('🌐 Web Server Active'));
+app.get('/', (req, res) => res.send('Bot is Active'));
+app.listen(process.env.PORT || 3000);
 
-const client = new Client({ 
+const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
-    ] 
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildModeration
+    ]
 });
 
+client.commands = new Collection();
 const xpCooldown = new Set();
+const msgLog = new Map();
+let joinVelocity = [];
 
-// --- FUNGSI AUTO ROLE (Mencari atau Membuat Role) ---
+const config = {
+    token: "MTQ1NDU0MzYzNzM4Njg5MTUwOQ.GS9Oyx.6lXXvs1g8NfWtW3aYkiDV01R6ATxV0u_MHMD_8",
+    mongoURI: "mongodb+srv://wanz:rn3Td8zKDRaLRbDZ@cluster0.bresujd.mongodb.net/dc?appName=Cluster0",
+    prefix: ".",
+    emoji_1: "<:emoji_1:123456789012345678>"
+};
+
+const commandFolders = fs.readdirSync('./src/commands');
+for (const folder of commandFolders) {
+    const commandFiles = fs.readdirSync(`./src/commands/${folder}`).filter(file => file.endsWith('.js'));
+    for (const file of commandFiles) {
+        const command = require(`./src/commands/${folder}/${file}`);
+        client.commands.set(command.name, command);
+    }
+}
+
 async function getOrCreateRole(guild, name, color) {
     let role = guild.roles.cache.find(r => r.name === name);
     if (!role) {
         try {
-            role = await guild.roles.create({
-                name: name,
-                color: color || 'Blue',
-                reason: 'Auto-created by Bot System'
-            });
-            console.log(`✅ Created Role: ${name}`);
-        } catch (e) {
-            console.log(`❌ Gagal buat role ${name}: Posisi role bot harus paling atas!`);
-        }
+            role = await guild.roles.create({ name, color, reason: 'System Auto Role' });
+        } catch (e) { console.log("Permission Error: Role bot harus di atas!"); }
     }
     return role;
 }
 
-client.on('ready', () => {
-    mongoose.connect(config.mongoURI);
-    console.log(`🚀 Logged in as ${client.user.tag}`);
+function createBar(current, total) {
+    const size = 10;
+    const progress = Math.round((size * current) / total);
+    return "▰".repeat(progress) + "▱".repeat(size - progress);
+}
+
+client.on('ready', async () => {
+    await mongoose.connect(config.mongoURI);
+    console.log(`Bot Online: ${client.user.tag}`);
 });
 
-// --- WELCOME & VERIFY ---
 client.on('guildMemberAdd', async (member) => {
-    const channel = member.guild.channels.cache.get(config.welcomeChannel);
-    if (channel) {
-        channel.send(`**Welcome NewCoding** <@${member.id}>**, Selamat datang!** ${config.emoji_1}`);
+    const now = Date.now();
+    joinVelocity.push(now);
+    joinVelocity = joinVelocity.filter(t => now - t < 10000);
+    if (joinVelocity.length > 8) return member.kick("Raid Protection");
+
+    const gData = await Guild.findOne({ guildId: member.guild.id });
+    const welcomeChan = member.guild.channels.cache.get(gData?.welcomeChannel);
+    if (welcomeChan) {
+        welcomeChan.send(`**Welcome NewCoding** <@${member.id}>**, Selamat datang di server kami!** ${config.emoji_1}`);
     }
 
-    // Kirim tombol verifikasi otomatis
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('verify_auto').setLabel('KLIK UNTUK MASUK').setStyle(ButtonStyle.Primary)
-    );
-    if (channel) channel.send({ content: `**Silahkan verifikasi disini <@${member.id}>**`, components: [row] });
+    const vChan = member.guild.channels.cache.get(gData?.verifyChannel);
+    if (vChan) {
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('verify_btn').setLabel('VERIFIKASI').setStyle(ButtonStyle.Success)
+        );
+        vChan.send({ content: `**Halo <@${member.id}>, klik tombol untuk verifikasi!**`, components: [row] });
+    }
 });
 
-// --- MESSAGE ENGINE (XP & AUTO ROLE REWARD) ---
+client.on('guildMemberRemove', async (member) => {
+    const gData = await Guild.findOne({ guildId: member.guild.id });
+    const log = member.guild.channels.cache.get(gData?.logChannel);
+    if (log) log.send(`**📤 Member Leave:** **${member.user.tag}**`);
+});
+
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
 
-    // Perintah .start
-    if (message.content === '.start') {
+    if (message.content === `${config.prefix}start`) {
         await message.delete();
-        return message.channel.send(`**SYSTEM READY!**`).then(m => setTimeout(() => m.delete(), 2000));
+        const m = await message.channel.send(`**SYSTEM CLEANED & READY!** ${config.emoji_1}`);
+        return setTimeout(() => m.delete(), 3000);
     }
 
-    // Anti-Link
-    if (/(https?:\/\/|discord\.gg)/i.test(message.content) && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-        return message.delete();
+    const logs = msgLog.get(message.author.id) || [];
+    logs.push(Date.now());
+    msgLog.set(message.author.id, logs.filter(t => Date.now() - t < 5000));
+    if (logs.length > 5) return message.delete();
+
+    const phishing = /(discord-nitro|nitro-app|free-nitro|discord-gift|bit\.ly|t\.co|discord\.gg)/i;
+    if (phishing.test(message.content) && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        await message.delete();
+        return;
     }
 
-    // XP & Leveling
     if (!xpCooldown.has(message.author.id)) {
         let data = await User.findOneAndUpdate(
             { userId: message.author.id, guildId: message.guild.id },
@@ -80,32 +115,39 @@ client.on('messageCreate', async (message) => {
             { upsert: true, new: true }
         );
 
-        if (data.xp >= data.level * 1000) {
+        const nextLv = data.level * 1000;
+        if (data.xp >= nextLv) {
             data.level += 1;
             data.xp = 0;
             await data.save();
 
-            message.channel.send(`**LEVEL UP!** <@${message.author.id}> mencapai **Level ${data.level}**`);
+            const role = await getOrCreateRole(message.guild, `Elite Level ${data.level}`, 'Gold');
+            if (role) await message.member.roles.add(role);
 
-            // AUTO ROLE REWARD (Berdasarkan Nama)
-            if (data.level === 5) {
-                const role = await getOrCreateRole(message.guild, 'Elite Level 5', 'Gold');
-                if (role) await message.member.roles.add(role);
-            }
+            const bar = createBar(data.xp, nextLv);
+            message.channel.send(`**LEVEL UP!** <@${message.author.id}> **Level ${data.level}**\n**Next:** \`[ ${bar} ]\``);
         }
         xpCooldown.add(message.author.id);
         setTimeout(() => xpCooldown.delete(message.author.id), 60000);
     }
+
+    if (!message.content.startsWith(config.prefix)) return;
+    const args = message.content.slice(config.prefix.length).trim().split(/ +/);
+    const cmdName = args.shift().toLowerCase();
+    const command = client.commands.get(cmdName) || client.commands.find(c => c.aliases?.includes(cmdName));
+
+    if (command) {
+        try { command.execute(message, args, client); } catch (e) { console.error(e); }
+    }
 });
 
-// --- INTERACTION HANDLER (VERIFY TANPA ID) ---
 client.on('interactionCreate', async (i) => {
-    if (i.customId === 'verify_auto') {
-        // Otomatis cari/buat role bernama "Member"
+    if (!i.isButton()) return;
+    if (i.customId === 'verify_btn') {
         const role = await getOrCreateRole(i.guild, 'Member', 'Green');
         if (role) {
             await i.member.roles.add(role);
-            await i.reply({ content: "**Verifikasi Berhasil! Kamu sekarang adalah Member.**", ephemeral: true });
+            await i.reply({ content: "**Verifikasi Berhasil!**", ephemeral: true });
         }
     }
 });
